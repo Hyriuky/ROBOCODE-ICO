@@ -21,17 +21,27 @@ public class OmniBotV20 extends AdvancedRobot {
         setAdjustRadarForGunTurn(true);
 
         while (true) {
+            // Atualiza o alvo mais próximo
             scanForClosestEnemy();
 
-            if (targetName != null && enemies.containsKey(targetName)) {
+            // Verifica se o alvo atual ainda é válido (existe e foi visto recentemente)
+            if (targetName != null) {
+                EnemyData target = enemies.get(targetName);
+                if (target == null || getTime() - target.lastSeen > 5) {
+                    // Inimigo sumiu ou foi eliminado, limpa o alvo
+                    targetName = null;
+                }
+            }
+
+            if (targetName != null) {
+                // Alvo válido: trava o radar no inimigo
                 EnemyData target = enemies.get(targetName);
                 double radarTurn = getHeading() + target.lastBearing - getRadarHeading();
                 setTurnRadarRight(Utils.normalRelativeAngleDegrees(radarTurn) * 2);
                 lastScanTime = getTime();
             } else {
-                if (getTime() - lastScanTime > 1) {
-                    setTurnRadarRight(360); // Giro até escanear alguém
-                }
+                // Sem alvo: gira radar 360 graus para procurar inimigos
+                setTurnRadarRight(360);
             }
 
             execute();
@@ -42,17 +52,24 @@ public class OmniBotV20 extends AdvancedRobot {
         double closestDistance = Double.MAX_VALUE;
         String closestEnemy = null;
 
-        for (Map.Entry<String, EnemyData> entry : enemies.entrySet()) {
+        Iterator<Map.Entry<String, EnemyData>> it = enemies.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, EnemyData> entry = it.next();
             EnemyData e = entry.getValue();
-            if (getTime() - e.lastSeen < 4 && e.distance < closestDistance) {
+
+            // Remove inimigos não vistos há mais de 10 ticks para evitar travar em inimigos eliminados
+            if (getTime() - e.lastSeen > 10) {
+                it.remove();
+                continue;
+            }
+
+            if (e.distance < closestDistance) {
                 closestDistance = e.distance;
                 closestEnemy = entry.getKey();
             }
         }
 
-        if (closestEnemy != null) {
-            targetName = closestEnemy;
-        }
+        targetName = closestEnemy;
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
