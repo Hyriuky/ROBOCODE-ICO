@@ -173,4 +173,12 @@ public class OmniBotV20 extends AdvancedRobot {
             return angle;
         }
     }
+
+    public void onWin(WinEvent e) { // Comemoração de vitória 
+    for (int i = 0; i < 30; i++) {
+        setBodyColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f));
+        turnRight(20);
+        turnLeft(20);
+        }
+    }
 }
