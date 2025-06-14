@@ -6,10 +6,11 @@ import java.awt.geom.Point2D; // Importa a classe para cálculos com pontos em 2
 public class RoboTesteV1 extends AdvancedRobot {
 
     // == Sistema de movimentação do OmniBotV20 == //
+	
     private int direction = 1; // Direção atual do robô (1 para frente, -1 para trás)
     private double previousEnergy = 100; // Armazena a energia anterior do inimigo para detectar tiros
 
-    // == Sistema de tiro inteligente que você já tinha == //
+    // == Sistema de tiro inteligente  == //
     private static final double MAX_FIRE_DISTANCE = 350.0; // Distância máxima para disparo
 
     // == Radar e mira == //
@@ -17,7 +18,11 @@ public class RoboTesteV1 extends AdvancedRobot {
     private String targetName = null; // Nome do inimigo atual a ser seguido/atacado
 
     public void run() {
-        setColors(Color.RED, Color.RED, Color.BLACK); // Define as cores do corpo, arma e radar
+		setBodyColor(Color.red); // Cor do corpo
+		setGunColor(Color.black); // Cor da arma
+		setRadarColor(Color.red); // Cor do radar
+		setScanColor(Color.red); // Cor do scan
+		setBulletColor(Color.blue); // Cor da bala
         setAdjustGunForRobotTurn(true); // Permite que a arma se mova independentemente do corpo
         setAdjustRadarForRobotTurn(true); // Permite que o radar se mova independentemente do corpo
 
@@ -44,6 +49,7 @@ public class RoboTesteV1 extends AdvancedRobot {
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
+	
         // == Atualização do sistema de rastreamento == //
         String enemyName = e.getName(); // Nome do robô escaneado
         EnemyData data = enemies.getOrDefault(enemyName, new EnemyData()); // Recupera ou cria dados do inimigo
@@ -122,7 +128,8 @@ public class RoboTesteV1 extends AdvancedRobot {
 
     public void onHitRobot(HitRobotEvent e) {
         targetName = e.getName(); // Define o novo alvo como o robô colidido
-        double angle = normalRelativeAngleDegrees(e.getBearing()); // Calcula o ângulo para girar a arma
+        setTurnRadarRight(360); // Força um giro rápido do radar para tentar localizá-lo imediatamente
+		double angle = normalRelativeAngleDegrees(e.getBearing()); // Calcula o ângulo para girar a arma
         setTurnGunRight(angle); // Gira arma para o inimigo
         setFire(3); // Dispara com força máxima
         direction *= -1; // Muda direção
@@ -195,12 +202,12 @@ private static double normalRelativeAngleDegrees(double angle) {
     // == Comemoração de vitória == //
 
     public void onWin(WinEvent e) {
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < 50; i++) {
             setBodyColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f)); // Troca cor do corpo
             setGunColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f)); // Troca cor da arma
             setRadarColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f)); // Troca cor do radar
-            turnRight(20); // "Dança" girando pra direita
-            turnLeft(20);  // "Dança" girando pra esquerda
+            turnRight(25); // "Dança" girando pra direita
+            turnLeft(25);  // "Dança" girando pra esquerda
             execute(); // Executa os comandos
         }
     }
