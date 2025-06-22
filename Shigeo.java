@@ -5,10 +5,8 @@ import java.util.*;
 public class Shigeo extends AdvancedRobot {
 
     private int direction = 1;
-	private double previousEnergy = 100;
 
     public void run() {
-		//== Cores ==//
         setBodyColor(Color.black);
         setGunColor(Color.gray);
         setRadarColor(Color.gray);
@@ -18,7 +16,6 @@ public class Shigeo extends AdvancedRobot {
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForRobotTurn(true);
 
-        //== Loop principal ==// 
         while (true) {
 		    turnRadarRight(360);
 			ahead(100 * direction);
@@ -26,29 +23,7 @@ public class Shigeo extends AdvancedRobot {
         }
     }
 
- //== Mira e tiro adaptativo + movimentação por energia ==//
     public void onScannedRobot(ScannedRobotEvent e) {
-        //== Atualiza dados do inimigo ==//
-        String enemyName = e.getName();
-        EnemyData data = enemies.getOrDefault(enemyName, new EnemyData());
-        data.update(e);
-        enemies.put(enemyName, data);
-        scanForClosestEnemy();
-
-        //== Detecta tiro inimigo e ajusta movimentação ==//
-        double changeInEnergy = previousEnergy - e.getEnergy();
-        if (changeInEnergy > 0 && changeInEnergy <= 3.0) {
-            direction *= -1;
-            setAhead(150 * direction);
-        }
-        previousEnergy = e.getEnergy();
-
-        //== Movimentação padrão: andar perpendicular ao inimigo ==//
-        double angle = normalRelativeAngleDegrees(e.getBearing() + 90 - (15 * direction));
-        setTurnRight(angle);
-        setAhead(100 * direction);
-
-        //== Mira e disparo adaptativo ==//
         if (e.getDistance() <= MAX_FIRE_DISTANCE) {
             double firePower = calculateAdaptiveFirePower(e.getDistance());
             double bulletSpeed = 20 - 3 * firePower;
@@ -97,22 +72,19 @@ public class Shigeo extends AdvancedRobot {
         while (angle < -Math.PI) angle += 2 * Math.PI;
         return angle;
     }
-	
-    //== Reação ao ser atingido por tiro ==//
+
     public void onHitByBullet(HitByBulletEvent e) {
         direction *= -1;
         setTurnRight(90 - e.getBearing());
         setAhead(100 * direction);
     }
 
-    //== Reação ao bater na parede ==//
     public void onHitWall(HitWallEvent e) {
         direction *= -1;
         setBack(50);
         setTurnRight(90);
     }
 
-    //== Reação ao colidir com outro robô ==//
     public void onHitRobot(HitRobotEvent e) {
         setTurnGunRight(normalRelativeAngleDegrees(e.getBearing()));
         setFire(3);
@@ -128,6 +100,7 @@ public class Shigeo extends AdvancedRobot {
     }
 
     // == Comemoração de vitória == //
+
     public void onWin(WinEvent e) {
         for (int i = 0; i < 50; i++) {
             // Troca cor do corpo
