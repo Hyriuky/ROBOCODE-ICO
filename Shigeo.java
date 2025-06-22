@@ -1,11 +1,16 @@
 import robocode.*;
 import java.awt.Color;
 import java.util.*;
+import java.awt.geom.Point2D;
 
 public class Shigeo extends AdvancedRobot {
 
     private int direction = 1;
 	private double previousEnergy = 100;
+    private Map<String, EnemyData> enemies = new HashMap<>();
+    private String targetName = null;
+
+    private static final double MAX_FIRE_DISTANCE = 350.0;
 
     public void run() {
 		//== Cores ==//
@@ -20,8 +25,23 @@ public class Shigeo extends AdvancedRobot {
 
         //== Loop principal ==// 
         while (true) {
-		    turnRadarRight(360);
-			ahead(100 * direction);
+            scanForClosestEnemy();
+
+            if (targetName != null) {
+                EnemyData target = enemies.get(targetName);
+                if (target == null || getTime() - target.lastSeen > 5) {
+                    targetName = null;
+                }
+            }
+
+            if (targetName != null) {
+                EnemyData target = enemies.get(targetName);
+                double radarTurn = getHeading() + target.lastBearing - getRadarHeading();
+                setTurnRadarRight(normalRelativeAngleDegrees(radarTurn) * 2);
+            } else {
+                setTurnRadarRight(360);
+            }
+
             execute();
         }
     }
@@ -139,5 +159,56 @@ public class Shigeo extends AdvancedRobot {
             turnLeft(25);
             execute();
         }
+    }
+
+
+    //== Auxiliares ==//
+
+    private void scanForClosestEnemy() {
+        double closestDistance = Double.MAX_VALUE;
+        String closestEnemy = null;
+
+        Iterator<Map.Entry<String, EnemyData>> it = enemies.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, EnemyData> entry = it.next();
+            EnemyData e = entry.getValue();
+
+            if (getTime() - e.lastSeen > 10) {
+                it.remove();
+                continue;
+            }
+
+            if (e.distance < closestDistance) {
+                closestDistance = e.distance;
+                closestEnemy = entry.getKey();
+            }
+        }
+        targetName = closestEnemy;
+    }
+
+    static class EnemyData {
+        double energy;
+        double lastBearing;
+        double distance;
+        long lastSeen;
+
+        void update(ScannedRobotEvent e) {
+            this.energy = e.getEnergy();
+            this.lastBearing = e.getBearing();
+            this.distance = e.getDistance();
+            this.lastSeen = e.getTime();
+        }
+    }    
+
+    private static double normalRelativeAngle(double angle) {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }
+
+    private static double normalRelativeAngleDegrees(double angle) {
+        while (angle > 180) angle -= 360;
+        while (angle < -180) angle += 360;
+        return angle;
     }
 }
