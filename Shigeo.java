@@ -4,6 +4,8 @@ import java.util.*;
 
 public class Shigeo extends AdvancedRobot {
 
+    private int direction = 1;
+
     public void run() {
         setBodyColor(Color.black);
         setGunColor(Color.gray);
@@ -16,10 +18,10 @@ public class Shigeo extends AdvancedRobot {
 
         while (true) {
 		    turnRadarRight(360);
+			ahead(100 * direction);
             execute();
         }
     }
-
 
     public void onScannedRobot(ScannedRobotEvent e) {
         if (e.getDistance() <= MAX_FIRE_DISTANCE) {
@@ -72,12 +74,29 @@ public class Shigeo extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        direction *= -1;
+        setTurnRight(90 - e.getBearing());
+        setAhead(100 * direction);
     }
 
     public void onHitWall(HitWallEvent e) {
+        direction *= -1;
+        setBack(50);
+        setTurnRight(90);
     }
 
     public void onHitRobot(HitRobotEvent e) {
+        setTurnGunRight(normalRelativeAngleDegrees(e.getBearing()));
+        setFire(3);
+        direction *= -1;
+        setBack(100);
+        execute();
+    }
+
+    private static double normalRelativeAngleDegrees(double angle) {
+        while (angle > 180) angle -= 360;
+        while (angle < -180) angle += 360;
+        return angle;
     }
 
     // == Comemoração de vitória == //
