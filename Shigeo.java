@@ -134,11 +134,13 @@ public class Shigeo extends AdvancedRobot {
 
     //== Reação ao colidir com outro robô ==//
     public void onHitRobot(HitRobotEvent e) {
-        setTurnGunRight(normalRelativeAngleDegrees(e.getBearing()));
+        targetName = e.getName(); 
+        setTurnRadarRight(360);
+	double angle = normalRelativeAngleDegrees(e.getBearing());
+        setTurnGunRight(angle);
         setFire(3);
         direction *= -1;
         setBack(100);
-        execute();
     }
 
     private static double normalRelativeAngleDegrees(double angle) {
@@ -160,7 +162,6 @@ public class Shigeo extends AdvancedRobot {
             execute();
         }
     }
-
 
     //== Auxiliares ==//
 
@@ -186,6 +187,8 @@ public class Shigeo extends AdvancedRobot {
         targetName = closestEnemy;
     }
 
+    // == Classe de dados do inimigo == //
+	
     static class EnemyData {
         double energy;
         double lastBearing;
@@ -199,16 +202,4 @@ public class Shigeo extends AdvancedRobot {
             this.lastSeen = e.getTime();
         }
     }    
-
-    private static double normalRelativeAngle(double angle) {
-        while (angle > Math.PI) angle -= 2 * Math.PI;
-        while (angle < -Math.PI) angle += 2 * Math.PI;
-        return angle;
-    }
-
-    private static double normalRelativeAngleDegrees(double angle) {
-        while (angle > 180) angle -= 360;
-        while (angle < -180) angle += 360;
-        return angle;
-    }
 }
