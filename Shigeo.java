@@ -11,6 +11,7 @@ public class Shigeo extends AdvancedRobot {
     private String targetName = null;
 
     private static final double MAX_FIRE_DISTANCE = 350.0;
+    private static final double SAFE_DISTANCE = 250.0; //== distância segura ==//
 
     public void run() {
 		//== Cores ==//
@@ -46,7 +47,7 @@ public class Shigeo extends AdvancedRobot {
         }
     }
 
- //== Mira e tiro adaptativo + movimentação por energia ==//
+    //== Mira e tiro adaptativo + movimentação por energia ==//
     public void onScannedRobot(ScannedRobotEvent e) {
         //== Atualiza dados do inimigo ==//
         String enemyName = e.getName();
@@ -54,6 +55,11 @@ public class Shigeo extends AdvancedRobot {
         data.update(e);
         enemies.put(enemyName, data);
         scanForClosestEnemy();
+
+        //== Limitador de distância segura ==// 
+        if (e.getDistance() < SAFE_DISTANCE) { 
+            setBack(SAFE_DISTANCE - e.getDistance()); 
+        } 
 
         //== Detecta tiro inimigo e ajusta movimentação ==//
         double changeInEnergy = previousEnergy - e.getEnergy();
@@ -108,7 +114,7 @@ public class Shigeo extends AdvancedRobot {
 
     private double calculateAdaptiveFirePower(double distance) {
         distance = Math.min(distance, MAX_FIRE_DISTANCE);
-        double power = 4.0 - (2.9 * (distance / MAX_FIRE_DISTANCE));
+        double power = 4.0 - (1.9 * (distance / MAX_FIRE_DISTANCE));
         return Math.max(0.1, Math.min(3.0, power));
     }
 
@@ -134,11 +140,11 @@ public class Shigeo extends AdvancedRobot {
 
     //== Reação ao colidir com outro robô ==//
     public void onHitRobot(HitRobotEvent e) {
-        targetName = e.getName(); 
-        setTurnRadarRight(360);
-	double angle = normalRelativeAngleDegrees(e.getBearing());
-        setTurnGunRight(angle);
-        setFire(3);
+        targetName = e.getName(); //== mudou ==//
+        setTurnRadarRight(360); //== mudou ==//
+        double angle = normalRelativeAngleDegrees(e.getBearing()); //== mudou ==//
+        setTurnGunRight(angle); //== mudou ==//
+        setFire(3); 
         direction *= -1;
         setBack(100);
     }
