@@ -1,23 +1,32 @@
 import robocode.*;
 import robocode.util.Utils;
 import java.awt.Color;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
-public class Shigeo extends AdvancedRobot {
+public class ShigeoNOVO extends AdvancedRobot {
 
-    private int direction = 1;
-    private double previousEnergy = 100;
-    private Map<String, EnemyData> enemies = new HashMap<>();
-    private String targetName = null;
+    //== Variáveis de estado e Constantes ==//
+    private int direction = 1; // Para alternar a direção do movimento
+    private Map<String, EnemyData> enemies = new HashMap<>(); // Armazena dados dos inimigos
+    private String targetName = null; // O alvo atual do robô
 
-    private static final double MAX_FIRE_DISTANCE = 350.0;
-    // Distância mínima OBRIGATÓRIA que o robô tentará manter do inimigo.
-    private static final double MINIMUM_DISTANCE = 100.0;
-    // Distância confortável para iniciar a movimentação lateral.
-    private static final double SAFE_DISTANCE = 150.0;
+    // Constantes de Estratégia e Comportamento
+    private static final double FATOR_DE_COMPENSACAO = 0.55; // Fator de ajuste para a mira
+    private static final double MAX_FIRE_DISTANCE = 350.0;   // Distância máxima de tiro
+    private static final double MINIMUM_DISTANCE = 100.0;    // Distância mínima a ser mantida do alvo
+    private static final double CLOSE_RANGE_DISTANCE = 150.0; // Distância considerada "curto alcance"
+    private static final double MOVEMENT_DISTANCE = 150.0;   // Distância padrão de movimento
+    private static final double STRAFE_DISTANCE = 100.0;     // Distância para movimento lateral (strafe)
+    private static final double STRAFE_OFFSET_ANGLE = 15.0;  // Ângulo de ajuste para o strafe
+    private static final double GUN_TARGET_TOLERANCE_DEGREES = 10.0; // Tolerância em graus para o canhão ser considerado na mira
+    private static final int ESCAPE_THREAT_THRESHOLD = 2;        // Número de inimigos mirando para acionar a fuga
+    private static final double AIMING_TOLERANCE_DEGREES = 20.0; // Tolerância para considerar que um inimigo está mirando
+    private static final int TARGET_LOST_TICKS = 5;              // Ticks até o radar considerar o alvo perdido
+    private static final int ENEMY_DATA_TIMEOUT_TICKS = 15;      // Ticks para dados de inimigos expirarem na análise de ameaça
 
+    //== Loop Principal e Comportamento do Radar ==//
     public void run() {
-        //== Cores ==//
         setBodyColor(Color.black);
         setGunColor(Color.gray);
         setRadarColor(Color.gray);
@@ -27,7 +36,6 @@ public class Shigeo extends AdvancedRobot {
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForRobotTurn(true);
 
-        //== Loop principal ==//
         while (true) {
             if (targetName == null) {
                 scanForClosestEnemy();
@@ -35,114 +43,158 @@ public class Shigeo extends AdvancedRobot {
 
             if (targetName != null) {
                 EnemyData target = enemies.get(targetName);
-                // Se não vemos o alvo há algum tempo, procuramos um novo
-                if (target == null || getTime() - target.lastSeen > 5) {
+                if (target == null || getTime() - target.lastSeen > TARGET_LOST_TICKS) {
                     targetName = null;
-                    setTurnRadarRight(360); // Gira o radar para encontrar alvos
+                    setTurnRadarRight(360);
                 } else {
-                    // Mantém o radar travado no alvo
                     double radarTurn = getHeadingRadians() + target.lastBearingRadians - getRadarHeadingRadians();
                     setTurnRadarRightRadians(Utils.normalRelativeAngle(radarTurn) * 2);
                 }
             } else {
-                setTurnRadarRight(360); // Gira se não tiver alvo
+                setTurnRadarRight(360);
             }
-
             execute();
         }
     }
 
-    //== LÓGICA PRINCIPAL DE COMBATE E MOVIMENTO ==//
+    //== Lógica Principal de Combate e Movimento ==//
     public void onScannedRobot(ScannedRobotEvent e) {
-        //== Atualiza dados do inimigo ==//
         String enemyName = e.getName();
         EnemyData data = enemies.getOrDefault(enemyName, new EnemyData());
-        data.update(e);
+        data.update(e, this);
         enemies.put(enemyName, data);
         scanForClosestEnemy();
 
-        // Se o robô escaneado não é nosso alvo principal, ignora o resto da lógica para ele.
         if (targetName == null || !targetName.equals(e.getName())) {
             return;
         }
 
-        //== LÓGICA DE MOVIMENTO UNIFICADA ==//
-        // Detecta tiro inimigo para mudar de direção. Apenas inverte a variável.
-        double changeInEnergy = previousEnergy - e.getEnergy();
-        if (changeInEnergy > 0 && changeInEnergy <= 3.0) {
-            direction *= -1;
-        }
-        previousEnergy = e.getEnergy();
+        int threatCount = countIncomingAimers();
 
-        // 1. LÓGICA DE DISTÂNCIA PRIORITÁRIA
-        if (e.getDistance() < MINIMUM_DISTANCE) {
-            // Se estivermos MUITO perto, a prioridade máxima é recuar.
-            // Viramos perpendicularmente e damos ré para nos afastarmos enquanto nos esquivamos.
-            double angleToTurn = normalRelativeAngleDegrees(e.getBearing() + 90);
-            setTurnRight(angleToTurn);
-            setBack(150); // Move para trás com velocidade máxima para se afastar
-
+        if (threatCount >= ESCAPE_THREAT_THRESHOLD) {
+            executeEscapeManeuver();
         } else {
-            // 2. LÓGICA DE MOVIMENTO PADRÃO (se a distância for segura)
-            // Anda de lado (movimento perpendicular) para desviar de tiros.
-            double angle = normalRelativeAngleDegrees(e.getBearing() + 90 - (15 * direction));
-            setTurnRight(angle);
-            setAhead(100 * direction); // Move-se para frente ou para trás na direção perpendicular
+            // Detecta tiro inimigo usando a energia anterior específica daquele inimigo
+            double changeInEnergy = data.previousEnergy - e.getEnergy();
+            if (changeInEnergy > 0 && changeInEnergy <= Rules.MAX_BULLET_POWER) {
+                direction *= -1;
+            }
+            data.previousEnergy = e.getEnergy(); // Atualiza a energia anterior *deste* inimigo
+
+            if (e.getDistance() < MINIMUM_DISTANCE) {
+                setTurnRight(normalRelativeAngleDegrees(e.getBearing() + 90));
+                setBack(MOVEMENT_DISTANCE);
+            } else {
+                setTurnRight(normalRelativeAngleDegrees(e.getBearing() + 90 - (STRAFE_OFFSET_ANGLE * direction)));
+                setAhead(STRAFE_DISTANCE * direction);
+            }
         }
 
-        //== Mira e disparo adaptativo ==//
         if (e.getDistance() <= MAX_FIRE_DISTANCE) {
             double firePower = calculateAdaptiveFirePower(e.getDistance());
-
-            // MIRA COM COMPENSAÇÃO LINEAR
             double absBearingRad = getHeadingRadians() + e.getBearingRadians();
-            double compensacaoLinear = e.getVelocity() * Math.sin(e.getHeadingRadians() - absBearingRad) / Rules.getBulletSpeed(firePower);
             
-            // Ajuste fino da compensação
-            if (e.getDistance() <= 120.0) compensacaoLinear *= 0.7;
+            double compensacaoLinear = e.getVelocity() * Math.sin(e.getHeadingRadians() - absBearingRad) / Rules.getBulletSpeed(firePower);
+            compensacaoLinear *= FATOR_DE_COMPENSACAO;
+
+            if (e.getDistance() <= CLOSE_RANGE_DISTANCE) {
+                compensacaoLinear *= 0.7; // Ajuste fino para curtas distâncias
+            }
 
             double gunTurnRad = Utils.normalRelativeAngle(absBearingRad - getGunHeadingRadians() + compensacaoLinear);
             setTurnGunRightRadians(gunTurnRad);
 
-            // ATIRAR!
-            if (getGunHeat() == 0 && Math.abs(getGunTurnRemaining()) < 10) {
+            if (getGunHeat() == 0 && Math.abs(getGunTurnRemaining()) < GUN_TARGET_TOLERANCE_DEGREES) {
                 setFire(firePower);
             }
         }
     }
-    
-    private double calculateAdaptiveFirePower(double distance) {
-        distance = Math.min(distance, MAX_FIRE_DISTANCE);
-        double power = 4.0 - (2.1 * (distance / MAX_FIRE_DISTANCE));
-        return Math.max(0.1, Math.min(3.0, power));
-    }
-    
-    public void onHitByBullet(HitByBulletEvent e) {
-        // Ao ser atingido, inverte a direção do movimento para sair da mira do inimigo.
-        direction *= -1;
+
+    //== Análise de Ameaça ==//
+    private int countIncomingAimers() {
+        int aimingEnemies = 0;
+        for (EnemyData enemy : enemies.values()) {
+            if (getTime() - enemy.lastSeen > ENEMY_DATA_TIMEOUT_TICKS) continue;
+
+            double angleToMe = Math.atan2(getX() - enemy.x, getY() - enemy.y);
+            double angleDiff = Utils.normalRelativeAngle(enemy.headingRadians - angleToMe);
+
+            if (Math.toDegrees(Math.abs(angleDiff)) < AIMING_TOLERANCE_DEGREES) {
+                aimingEnemies++;
+            }
+        }
+        return aimingEnemies;
     }
 
-    public void onHitWall(HitWallEvent e) {
-        // Se bater na parede, inverte a direção e recua.
-        direction *= -1;
-        setBack(100);
+    //== Manobra de Fuga ==//
+    private void executeEscapeManeuver() {
+        double avgX = 0, avgY = 0;
+        int threatCount = 0;
+
+        for (EnemyData enemy : enemies.values()) {
+            // Usa uma tolerância maior aqui para incluir inimigos relevantes
+            if (getTime() - enemy.lastSeen < (ENEMY_DATA_TIMEOUT_TICKS + 5)) {
+                avgX += enemy.x;
+                avgY += enemy.y;
+                threatCount++;
+            }
+        }
+
+        if (threatCount > 0) {
+            avgX /= threatCount;
+            avgY /= threatCount;
+            double escapeAngle = Math.atan2(getX() - avgX, getY() - avgY);
+            setTurnRightRadians(Utils.normalRelativeAngle(escapeAngle - getHeadingRadians()));
+            setAhead(MOVEMENT_DISTANCE);
+            out.println("FUGINDO! Ameaças: " + threatCount);
+        }
     }
-    
-    public void onHitRobot(HitRobotEvent e) {
-        // Se colidir com outro robô, considera-o o novo alvo prioritário
-        // e recua para criar distância imediatamente.
-        targetName = e.getName();
+
+    //== Reação a Eventos ==//
+    public void onHitByBullet(HitByBulletEvent e) {
         direction *= -1;
-        setBack(100);
+        setAhead(MOVEMENT_DISTANCE * direction);
+    }
+
+    //== Lógica de colisão com parede ==//
+    public void onHitWall(HitWallEvent e) {
+        // Ao bater na parede, apenas inverte a direção do movimento.
+        direction *= -1;
+        setAhead(MOVEMENT_DISTANCE);
+    }
+
+    public void onHitRobot(HitRobotEvent e) {
+        targetName = e.getName();
+        out.println("Colisão! Novo alvo: " + targetName);
+
+        double gunTurn = Utils.normalRelativeAngle(getHeadingRadians() + e.getBearingRadians() - getGunHeadingRadians());
+        setTurnGunRightRadians(gunTurn);
+        
+        // Atira com força máxima, usando a constante das regras do jogo
+        setFire(Rules.MAX_BULLET_POWER);
+        
+        setBack(STRAFE_DISTANCE);
+    }
+
+    public void onRobotDeath(RobotDeathEvent e) {
+        enemies.remove(e.getName());
+        if (e.getName().equals(targetName)) {
+            targetName = null;
+            scanForClosestEnemy();
+        }
+    }
+
+    //== Métodos Auxiliares ==//
+    private double calculateAdaptiveFirePower(double distance) {
+        double power = 4.0 - (2.5 * (Math.min(distance, MAX_FIRE_DISTANCE) / MAX_FIRE_DISTANCE));
+        return Math.max(0.1, Math.min(Rules.MAX_BULLET_POWER, power));
     }
 
     private void scanForClosestEnemy() {
         double closestDistance = Double.MAX_VALUE;
         String closestEnemy = null;
         for (EnemyData e : enemies.values()) {
-            if (getTime() - e.lastSeen > 10) {
-                continue; // Ignora inimigos "perdidos"
-            }
+            if (getTime() - e.lastSeen > 10) continue;
             if (e.distance < closestDistance) {
                 closestDistance = e.distance;
                 closestEnemy = e.name;
@@ -153,27 +205,20 @@ public class Shigeo extends AdvancedRobot {
         }
     }
     
-    // Normaliza um ângulo em graus para o intervalo -180 a 180
     private double normalRelativeAngleDegrees(double angle) {
         return Utils.normalRelativeAngleDegrees(angle);
     }
 
-    public void onWin(WinEvent e) {
-        setTurnRadarRight(36000);
-        setTurnGunRight(36000);
-        setTurnRight(36000);
-    }
-
+    //== Classe de Dados do Inimigo ==//
     static class EnemyData {
         String name;
-        double energy;
-        double lastBearingRadians; // Armazenar em radianos é mais eficiente com Utils
-        double distance;
-        double headingRadians;
-        double velocity;
+        double energy, distance, headingRadians, velocity;
+        double lastBearingRadians;
         long lastSeen;
+        double x, y; // Posição absoluta do inimigo
+        double previousEnergy = 100; // Energia anterior específica deste inimigo
 
-        void update(ScannedRobotEvent e) {
+        void update(ScannedRobotEvent e, AdvancedRobot robot) {
             this.name = e.getName();
             this.energy = e.getEnergy();
             this.lastBearingRadians = e.getBearingRadians();
@@ -181,6 +226,19 @@ public class Shigeo extends AdvancedRobot {
             this.headingRadians = e.getHeadingRadians();
             this.velocity = e.getVelocity();
             this.lastSeen = e.getTime();
+
+            double absBearingRad = robot.getHeadingRadians() + e.getBearingRadians();
+            this.x = robot.getX() + e.getDistance() * Math.sin(absBearingRad);
+            this.y = robot.getY() + e.getDistance() * Math.cos(absBearingRad);
+        }
+    }
+    //== Comemoração de Vitória ==//
+    public void onWin(WinEvent e) {
+        for (int i = 0; i < 50; i++) {
+            setBodyColor(Color.getHSBColor((float) Math.random(), 1.0f, 1.0f));
+            turnRight(30);
+            turnLeft(30);
+            execute();
         }
     }
 }
