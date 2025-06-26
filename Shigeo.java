@@ -4,7 +4,7 @@ import java.awt.Color;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ShigeoNOVO extends AdvancedRobot {
+public class Shigeo extends AdvancedRobot {
 
     //== Variáveis de estado e Constantes ==//
     private int direction = 1; // Para alternar a direção do movimento
@@ -235,9 +235,12 @@ public class ShigeoNOVO extends AdvancedRobot {
     //== Comemoração de Vitória ==//
     public void onWin(WinEvent e) {
         for (int i = 0; i < 50; i++) {
-            setBodyColor(Color.getHSBColor((float) Math.random(), 1.0f, 1.0f));
-            turnRight(30);
-            turnLeft(30);
+            setBodyColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f));
+            setGunColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f));
+            setRadarColor(Color.getHSBColor((float)Math.random(), 1.0f, 1.0f));
+            
+            turnRight(25);
+            turnLeft(25);
             execute();
         }
     }
